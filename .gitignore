@@ -1,3 +1,13 @@
+target/
+data/
+.idea/
+.vscode/
+*.log
+.env
+*.iml
+node_modules/
+test-results/
+maven-local-settings.xml
 # Compiled class file
 *.class
 
