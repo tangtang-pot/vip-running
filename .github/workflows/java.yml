@@ -5,6 +5,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: member-card-platform
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -12,4 +15,5 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+          cache-dependency-path: member-card-platform/pom.xml
       - run: mvn -B verify
