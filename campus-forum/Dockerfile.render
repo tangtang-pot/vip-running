@@ -1,0 +1,15 @@
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+WORKDIR /workspace
+COPY pom.xml ./
+COPY forum-service ./forum-service
+RUN mvn -B -pl forum-service -am -DskipTests package
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+RUN mkdir -p /app/data && chown -R 10001:10001 /app
+COPY --from=build --chown=10001:10001 /workspace/forum-service/target/forum-service-1.0.0.jar /app/forum.jar
+USER 10001
+ENV BIND_ADDRESS=0.0.0.0
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError"
+EXPOSE 10000
+ENTRYPOINT ["java", "-jar", "/app/forum.jar"]

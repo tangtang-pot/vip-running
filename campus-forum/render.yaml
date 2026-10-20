@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: campus-forum-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: campus-forum
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /api/categories
+    envVars:
+      - key: BIND_ADDRESS
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: INFRA_ENABLED
+        value: "false"
+      - key: NACOS_ENABLED
+        value: "false"
+      - key: SENTINEL_ENABLED
+        value: "false"
+      - key: AI_ENABLED
+        value: "false"
+      - key: DEV_MAILBOX
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DEMO_PASSWORD
+        sync: false
