@@ -1,0 +1,25 @@
+# When this project lives under campus-forum/, install this workflow at the
+# repository root .github/workflows/campus-forum.yml (the upload does that).
+name: Campus forum Java
+on:
+  push:
+    paths: ['campus-forum/**', '.github/workflows/campus-forum.yml']
+  pull_request:
+    paths: ['campus-forum/**', '.github/workflows/campus-forum.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: campus-forum
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: campus-forum/**/pom.xml
+      - run: mvn -B verify

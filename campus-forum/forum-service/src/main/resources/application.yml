@@ -1,0 +1,73 @@
+server:
+  port: ${PORT:8081}
+  address: ${BIND_ADDRESS:127.0.0.1}
+spring:
+  config:
+    import: optional:file:./local-ai.properties
+  application:
+    name: ${SERVICE_NAME:campus-forum}
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_ENABLED:false}
+        server-addr: ${NACOS_ADDRESS:127.0.0.1:8848}
+    sentinel:
+      enabled: ${SENTINEL_ENABLED:false}
+  datasource:
+    url: jdbc:h2:file:./data/forum;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ${DB_PASSWORD:}
+  sql:
+    init:
+      mode: always
+  task:
+    scheduling:
+      pool:
+        size: 2
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:127.0.0.1}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        auto-startup: ${INFRA_ENABLED:false}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+app:
+  service: ${SERVICE_MODE:all}
+  jwt-secret: ${JWT_SECRET:}
+  admin-password: ${ADMIN_PASSWORD:local-admin-change-me}
+  demo-password: ${DEMO_PASSWORD:local-student-change-me}
+  infra-enabled: ${INFRA_ENABLED:false}
+  dev-mailbox: ${DEV_MAILBOX:true}
+  mail-from: ${MAIL_FROM:forum@example.test}
+  ai:
+    enabled: ${AI_ENABLED:false}
+    api-key: ${AI_API_KEY:}
+    endpoint: ${AI_ENDPOINT:https://api.deepseek.com/chat/completions}
+    model: ${AI_MODEL:deepseek-flash}
+---
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: ${DB_URL:jdbc:mysql://mysql:3306/campus_forum?characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:forum_app}
+    password: ${DB_PASSWORD}
+app:
+  jwt-secret: ${JWT_SECRET}
+  admin-password: ${ADMIN_PASSWORD}
+  demo-password: ${DEMO_PASSWORD}
+  dev-mailbox: false

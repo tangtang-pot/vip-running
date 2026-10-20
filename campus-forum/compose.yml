@@ -1,0 +1,137 @@
+x-app-env: &app-env
+  SPRING_PROFILES_ACTIVE: mysql
+  DB_URL: jdbc:mysql://mysql:3306/campus_forum?characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+  DB_USERNAME: forum_app
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+  DEMO_PASSWORD: ${DEMO_PASSWORD:?Set DEMO_PASSWORD in .env}
+  INFRA_ENABLED: 'true'
+  DEV_MAILBOX: 'false'
+  BIND_ADDRESS: 0.0.0.0
+  NACOS_ENABLED: 'true'
+  NACOS_ADDRESS: nacos:8848
+  REDIS_HOST: redis
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_USER: forum
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+  SMTP_HOST: mailpit
+  SMTP_PORT: '1025'
+  PORT: '8081'
+x-service: &service
+  build: .
+  image: campus-forum:local
+  restart: unless-stopped
+  command: /app/forum.jar
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    nacos:
+      condition: service_started
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: campus_forum
+      MYSQL_USER: forum_app
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD}
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: [CMD-SHELL, 'mysqladmin ping -h localhost -u root -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      retries: 20
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: forum
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    volumes: [rabbit-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      retries: 20
+  nacos:
+    image: nacos/nacos-server:v2.5.1
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: 'false'
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+    # Development network only; no Nacos management port is published.
+  mailpit:
+    image: axllent/mailpit:v1.24
+    ports: ['127.0.0.1:8025:8025']
+  auth-service:
+    <<: *service
+    environment:
+      <<: *app-env
+      SERVICE_MODE: auth
+      SERVICE_NAME: auth-service
+  content-service:
+    <<: *service
+    environment:
+      <<: *app-env
+      SERVICE_MODE: content
+      SERVICE_NAME: content-service
+    depends_on:
+      auth-service:
+        condition: service_started
+  interaction-service:
+    <<: *service
+    environment:
+      <<: *app-env
+      SERVICE_MODE: interaction
+      SERVICE_NAME: interaction-service
+  operations-service:
+    <<: *service
+    environment:
+      <<: *app-env
+      SERVICE_MODE: operations
+      SERVICE_NAME: operations-service
+  log-service:
+    <<: *service
+    environment:
+      <<: *app-env
+      SERVICE_MODE: log
+      SERVICE_NAME: log-service
+  gateway:
+    <<: *service
+    command: /app/gateway.jar
+    environment:
+      NACOS_ADDRESS: nacos:8848
+      PORT: '8080'
+    ports: ['127.0.0.1:8082:8080']
+  agent-service:
+    <<: *service
+    profiles: [ai]
+    command: /app/agent.jar
+    environment:
+      NACOS_ADDRESS: nacos:8848
+      AUTH_URL: http://auth-service:8081
+      OLLAMA_URL: http://ollama:11434
+      MILVUS_HOST: ${MILVUS_HOST:-host.docker.internal}
+      CHAT_MODEL: ${CHAT_MODEL:-qwen2.5:3b}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+  ollama:
+    profiles: [ai]
+    image: ollama/ollama:0.9.6
+    volumes: [ollama-data:/root/.ollama]
+volumes:
+  mysql-data:
+  redis-data:
+  rabbit-data:
+  ollama-data:

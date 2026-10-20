@@ -1,0 +1,11 @@
+server:
+  port: ${PORT:8080}
+spring:
+  application:
+    name: forum-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDRESS:nacos:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}

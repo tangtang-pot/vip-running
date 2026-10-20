@@ -1,0 +1,6 @@
+# Copy to local-ai.properties. Never commit the real file or share your API key.
+# Online requests send the question and matching knowledge excerpts to the provider.
+app.ai.enabled=false
+app.ai.endpoint=https://api.deepseek.com/chat/completions
+app.ai.model=deepseek-flash
+app.ai.api-key=

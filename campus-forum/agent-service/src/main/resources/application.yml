@@ -1,0 +1,28 @@
+server:
+  port: ${PORT:8097}
+spring:
+  application:
+    name: agent-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDRESS:nacos:8848}
+  ai:
+    ollama:
+      base-url: ${OLLAMA_URL:http://ollama:11434}
+      chat:
+        options:
+          model: ${CHAT_MODEL:qwen2.5:3b}
+      embedding:
+        options:
+          model: ${EMBED_MODEL:nomic-embed-text}
+    vectorstore:
+      milvus:
+        client:
+          host: ${MILVUS_HOST:milvus}
+          port: ${MILVUS_PORT:19530}
+        embedding-dimension: 768
+        collection-name: campus_knowledge
+        initialize-schema: true
+app:
+  auth-url: ${AUTH_URL:http://auth-service:8081}

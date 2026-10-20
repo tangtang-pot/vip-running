@@ -1,0 +1,13 @@
+**/target/
+**/data/
+.idea/
+*.iml
+*.log
+.env
+node_modules/
+maven-local-settings.xml
+
+local-ai.properties
+wsl-setup-status.json
+middleware-result.json
+.local/

@@ -1,0 +1,48 @@
+# Stage 1: reuse Windows MySQL; run Redis, RabbitMQ and Mailpit here.
+# The mysql container is optional and is NOT started by start-docker-local.ps1.
+# Use: docker compose --env-file .env -f compose.local.yml up -d redis rabbitmq mailpit
+services:
+  nacos:
+    profiles: [cloud]
+    image: nacos-registry.cn-hangzhou.cr.aliyuncs.com/nacos/nacos-server:v2.5.1
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: 'false'
+      JVM_XMS: 128m
+      JVM_XMX: 384m
+      JVM_XMN: 128m
+    mem_limit: 768m
+    ports: ['127.0.0.1:18848:8848','127.0.0.1:19848:9848']
+  mysql:
+    image: public.ecr.aws/docker/library/mysql:8.4
+    extends:
+      file: compose.yml
+      service: mysql
+    command: ['--innodb-buffer-pool-size=64M','--max-connections=40','--performance-schema=OFF']
+    mem_limit: 512m
+    ports: ['127.0.0.1:13306:3306']
+  redis:
+    image: public.ecr.aws/docker/library/redis:7.4-alpine
+    extends:
+      file: compose.yml
+      service: redis
+    mem_limit: 128m
+    ports: ['127.0.0.1:16379:6379']
+  rabbitmq:
+    image: public.ecr.aws/docker/library/rabbitmq:4-management
+    extends:
+      file: compose.yml
+      service: rabbitmq
+    mem_limit: 512m
+    ports: ['127.0.0.1:15672:5672']
+  mailpit:
+    image: ghcr.io/axllent/mailpit:v1.24
+    extends:
+      file: compose.yml
+      service: mailpit
+    mem_limit: 64m
+    ports: ['127.0.0.1:11025:1025','127.0.0.1:8025:8025']
+volumes:
+  mysql-data:
+  redis-data:
+  rabbit-data:
