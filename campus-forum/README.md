@@ -1,136 +1,110 @@
-# 校园里 校园论坛
+# 校园里 · AI 辅助校园交流平台
 
-面向校园交流、学习求助、校园资讯和闲置交流的 Java 前后端项目。项目提供本地一体运行模式，以及网关、服务注册、Redis、RabbitMQ 和 AI 服务的扩展配置。
+面向校园交流、学习互助、资讯分享与闲置交流的 Java 全栈项目。围绕“内容发布—互动反馈—后台治理”构建论坛业务，并接入 DeepSeek 资料问答，帮助用户从已维护的知识资料中获取带来源的回答。
 
-**本目录仅分发源码与示例配置；真实密钥、加密凭据、本机数据、日志和编译产物均不入仓库。**
-
-## 本机真实联调（2026-10-20）
-
-已完成现有MySQL＋Docker Redis/RabbitMQ/Mailpit的真实业务联调，以及Nacos注册、网关非AI路由的分批验证。应用、Nacos、网关、Redis/RabbitMQ的服务重启恢复已验证。默认日常使用低内存联调版：双击 `start-docker-local.cmd`，访问 http://127.0.0.1:8083 。环境准备、加密凭据和分批启动步骤见 [本机运行说明](docs/DOCKER-LOCAL.md)，实际验证边界见 [验证记录](docs/VERIFICATION.md)。
-
-在线DeepSeek资料问答已完成一次真实调用及来源校验；Ollama/Milvus独立agent仍未真实验证，已完成150次有界只读并发测试，结果见 [并发测试记录](docs/CONCURRENCY.md)；未做生产部署或全服务同时压测。运行 `python prepare-source.py` 可生成排除本机凭据、数据和编译产物的源码包，不会创建或上传Git仓库。
+**技术栈：** Java 21 · Spring Boot · Spring Security · MyBatis · MySQL · Redis · RabbitMQ · Spring Cloud Gateway · Nacos · DeepSeek API · HTML / CSS / JavaScript
 
 ## 页面预览
 
+### 论坛首页
+
 ![论坛首页](docs/images/home.png)
+
+### 管理后台
 
 ![管理后台](docs/images/admin.png)
 
-## 本地运行
+## 核心功能
 
-需要 JDK 21+、Maven 3.6.3+。本地模式使用文件型 H2，无需安装 Redis、RabbitMQ 或大模型。
+| 模块 | 功能 |
+| --- | --- |
+| 账号与权限 | 邮箱验证码注册、JWT 登录、退出令牌撤销、普通用户与管理员权限控制 |
+| 内容交流 | 分类浏览、关键词搜索、服务端分页、帖子发布与编辑、作者删除、评论 |
+| 用户互动 | 点赞、收藏、个人收藏列表、互动数据异步同步、热榜 |
+| 运营管理 | 内容审核与恢复、运营统计、操作日志、知识资料维护 |
+| AI 资料助手 | 相关资料检索、DeepSeek 回答生成、参考来源展示、资料不足时明确提示 |
+
+## 关键技术设计
+
+### 1. 基于 Redis 的互动异步落库
+
+点赞与收藏接口接收明确的目标状态，避免重复请求导致状态反复切换。通过 Redis Lua 原子更新互动状态、版本号和待同步集合，定时任务将数据写入 MySQL；同步完成后，仅在版本未变化时清除待同步标记，防止覆盖后续操作。
+
+### 2. 缓存与热点访问
+
+帖子详情使用 Redis 缓存，结合随机过期时间分散集中失效；通过带持有者标识的互斥锁控制缓存重建。编辑、删除和互动同步会清理相关缓存，公开状态检查确保被审核隐藏的帖子不继续通过旧缓存展示。热榜使用 Redis Sorted Set 维护互动热度。
+
+### 3. RabbitMQ 异步验证码邮件
+
+注册验证码请求在数据库事务中写入验证码摘要与 Outbox 记录，后台任务投递 RabbitMQ，由消费者执行 SMTP 发送。结合投递标识、有效期检查和有限重试处理异常，缩短注册接口等待时间。验证码通过后使用事务与行锁完成一次性消费。
+
+### 4. 认证、权限与审计
+
+使用 Spring Security 与 JWT 实现接口鉴权，BCrypt 保存密码摘要。服务端校验帖子作者权限及管理员角色，退出时记录令牌撤销状态；对登录、发帖、评论等接口使用 Redis Lua 限流，关键业务操作写入审计日志。
+
+### 5. 带资料来源的 AI 问答
+
+先检索相关知识资料并限制上下文长度，再调用 DeepSeek 生成回答；通过 SSE 事件向页面返回模式、来源、答案与完成状态。未找到相关资料时直接提示，不发起模型请求；模型密钥由后端读取，浏览器不持有密钥。
+
+### 6. 网关与服务发现
+
+使用 Spring Cloud Gateway 与 Nacos 完成服务注册、发现和路由。业务应用可按认证、内容、互动、运营、日志五种角色启动独立进程，复用业务代码并共享 MySQL Schema；同时保留一体运行模式，便于开发和演示。
+
+## 技术栈与模块
+
+| 层次 | 技术 |
+| --- | --- |
+| 后端 | Java 21、Spring Boot 3.5、Spring Security、JWT、MyBatis |
+| 数据与消息 | MySQL 8、Redis、RabbitMQ、SMTP |
+| 服务协作 | Spring Cloud Gateway、Nacos |
+| 智能问答 | DeepSeek API、知识资料检索、SSE |
+| 前端 | 原生 HTML、CSS、JavaScript |
+| 工程与测试 | Maven、JUnit、Spring Boot Test、Docker、GitHub Actions |
+
+```text
+campus-forum/
+├── forum-service/       论坛业务、鉴权、资料助手与前端
+├── gateway/             网关路由与 Nacos 服务发现
+├── agent-service/       Spring AI / Ollama / Milvus 扩展模块
+├── docs/                API、运行说明与测试记录
+├── compose.yml          开发环境服务编排
+└── compose.local.yml    本机中间件环境
+```
+
+当前可运行的问答方案为 DeepSeek＋资料检索；向量检索扩展模块的环境要求与验证状态见[验证记录](docs/VERIFICATION.md)。
+
+## 快速体验
+
+需要 JDK 21+、Maven 3.6.3+。默认使用文件型 H2，可先体验论坛基础功能，再配置 MySQL、中间件和在线模型。
 
 ```bash
+cd campus-forum
 mvn test
 mvn -pl forum-service spring-boot:run
 ```
 
-浏览器打开 http://127.0.0.1:8081 。默认仅监听本机。账户数据、帖子、评论和互动保存在启动目录下的 `data/forum` 数据库文件，重启保留。
+打开 [http://127.0.0.1:8081](http://127.0.0.1:8081)。首次运行会初始化演示账号与示例内容。
 
-| 账号 | 本地开发密码 | 权限 |
+| 演示账号 | 本地开发密码 | 角色 |
 | --- | --- | --- |
-| student | local-student-change-me | 发帖、编辑删除自己的帖子、评论、点赞、收藏、资料问答 |
-| admin | local-admin-change-me | 普通用户功能、内容审核、运营统计、操作日志、知识资料添加 |
+| student | local-student-change-me | 普通用户 |
+| admin | local-admin-change-me | 管理员 |
 
-首次启动生成虚构演示帖子及一条使用说明；它们不是学校的真实通知。示例邮箱使用 `.test` 域名，不会给真实学生发送邮件。
+这些账号仅用于本地演示；其他环境应配置独立的账号密码和 JWT 密钥。
 
-注册时，本地模式会在页面显示开发验证码，5 分钟有效。这仅用于本地体验；MySQL 部署模式禁止返回验证码。用户名为 3 至 30 位字母、数字、下划线，密码为 12 至 72 字符。
+## 测试与工程质量
 
-## 模块与运行方式
+- 自动集成测试覆盖注册、鉴权、作者权限、互动、审核及问答接口，共 10 项测试通过。
+- 已验证 MySQL、Redis、RabbitMQ 邮件链路，以及 Nacos 注册、网关非 AI 路由和服务重启恢复。
+- 已完成 DeepSeek 真实资料问答调用与参考来源校验。
+- 提供本机短时并发测试脚本与结果，并通过 GitHub Actions 执行自动构建和测试。
 
-```text
-campus-forum/
-  forum-service/    Spring MVC 论坛业务、MyBatis、鉴权和前端
-  gateway/          Spring Cloud Gateway 路由、Nacos 服务发现
-  agent-service/    Spring AI、Ollama、Milvus、OpenFeign、Sentinel
-  compose.yml       MySQL、Redis、RabbitMQ、Nacos 与服务进程
-  docs/             API、架构、验证记录
-```
+## 项目文档
 
-`forum-service` 在本地以 `SERVICE_MODE=all` 运行所有论坛模块。中间件模式使用同一个经过构建的业务 JAR 启动五个独立服务进程：`auth`、`content`、`interaction`、`operations`、`log`，分别启用对应的 Controller，通过 Nacos 注册并由网关分发请求。这是一种按角色部署的共享代码方案，**不是五个独立源码仓库**；当前也共享同一个 MySQL Schema，未实现各服务独立数据所有权。
+- [接口说明](docs/API.md)
+- [中间件与本机运行](docs/DOCKER-LOCAL.md)
+- [在线模型配置](docs/ONLINE-AI.md)
+- [测试与验证范围](docs/VERIFICATION.md)
+- [并发测试记录](docs/CONCURRENCY.md)
 
-```mermaid
-flowchart LR
-    Browser[浏览器] --> Gateway[Spring Cloud Gateway]
-    Nacos[Nacos] -.注册发现.-> Gateway
-    Gateway --> Auth[认证服务]
-    Gateway --> Content[内容服务]
-    Gateway --> Interaction[互动服务]
-    Gateway --> Operations[运营服务]
-    Gateway --> Logs[日志服务]
-    Gateway --> Agent[问答服务 可选]
-    Auth --> MQ[RabbitMQ 邮件队列]
-    MQ --> Mail[邮件消费者]
-    Auth --> DB[(MySQL)]
-    Content --> DB
-    Interaction --> Redis[(Redis)]
-    Redis --> Sync[定时同步]
-    Sync --> DB
-    Operations --> DB
-    Logs --> DB
-    Agent --> Feign[OpenFeign 验证当前用户]
-    Feign --> Auth
-    Agent --> Milvus[(Milvus)]
-    Agent --> Ollama[Ollama]
-```
-
-## 已实现的业务代码
-
-- 分类浏览、关键词搜索、MyBatis 动态 SQL、参数化查询和服务端分页；正文按纯文本展示。
-- 邮箱验证码注册、BCrypt 密码校验、JWT 登录、数据库令牌撤销表，以及中间件模式的 Redis 黑名单写入。
-- 仅作者可以编辑或删除自己的帖子；管理员可隐藏与恢复公开帖子，隐藏内容不再通过公开详情访问。
-- 评论、点赞和收藏；接口接收明确的目标状态，不依赖不稳定的反复切换操作。本地模式写数据库，中间件模式写入 Redis 版本与脏数据集合，定时按版本同步数据库，失败保留待重试项。
-- Redis 热榜、详情缓存、互斥缓存重建，以及本地模式数据库热度计算；缓存详情前先检查帖子是否公开，防止审核后继续读取旧缓存。
-- 发送验证码、登录、发帖、评论和问答频率限制。中间件模式使用 Redis Lua，开发模式使用进程内固定窗口。
-- 后台统计、帖子审核、最近操作日志及知识资料添加。成功的关键操作记录审计数据。
-- RabbitMQ 异步邮件消费者、数据库 Outbox 和有限重试；SMTP 在后台线程执行，不阻塞验证码请求。
-- 本地资料检索与 SSE 输出；可选 Spring AI 服务实现 Ollama + Milvus 检索增强生成、资料分块、重叠片段、来源输出及 Sentinel QPS 限制。
-
-## AI 模式的界限
-
-本地默认页面会明确标注“资料检索模式：非大模型生成”，按双字片段匹配返回资料，不伪装成 RAG。真正的向量检索和模型生成由独立 `agent-service` 提供，需要运行 Ollama、Milvus 并准备模型。
-
-AI 服务提供单轮问答，检索上限为 4 段，参考资料裁剪至 7000 字符；没有实现简历中提到的多轮消息摘要压缩。前端为原生 HTML/CSS/JavaScript，未使用 Vue 3 或 Element Plus；分页使用 MyBatis SQL 的 `LIMIT/OFFSET`，没有引入 MyBatis-Plus 或 PageHelper。请以实际源码和验证记录为准描述项目。
-
-## 中间件部署
-
-构建全部模块：
-
-```bash
-mvn -Pcloud,ai package
-```
-
-复制 `.env.example` 为 `.env`，替换密码和至少 32 字节的 JWT 密钥后：
-
-```bash
-docker compose up --build
-```
-
-论坛入口：http://127.0.0.1:8082 。邮件开发收件箱：http://127.0.0.1:8025 。验证码邮件被 Mailpit 捕获，不会向外投递；要真实发送邮件，需替换 SMTP 配置。Nacos、Redis、数据库和 RabbitMQ 仅在 Docker 网络内开放，不发布管理端口。
-
-所有业务服务必须使用相同 JWT 密钥。默认本地模式未提供密钥时每次启动会生成随机密钥，因此重启会使旧令牌失效。
-
-### 启用真正的 RAG
-
-先准备可访问的 Milvus 实例，在 `.env` 设置 `MILVUS_HOST`，再启动 AI Profile：
-
-```bash
-docker compose --profile ai up --build
-docker compose exec ollama ollama pull qwen2.5:3b
-docker compose exec ollama ollama pull nomic-embed-text
-```
-
-模型下载完成后重启 `agent-service`。嵌入模型应输出 768 维向量，模型变更时需要匹配 Milvus 集合维度。管理员在页面添加资料后方可提问。Milvus 官方部署示例见 [官方 Docker Compose](https://github.com/milvus-io/milvus/blob/v2.5.10/deployments/docker/standalone/docker-compose.yml)。
-
-Docker 配置是本地开发拓扑。公网运行还需 TLS、真实域名、密钥管理、账号管理、可靠备份和监控。当前项目没有上传或上线。
-
-## 一致性与限制
-
-- Redis 互动使用版本字段；同步完成后仅在版本未变化时移除脏标记。生产环境仍应验证 Redis 故障恢复、持久化与多实例场景。
-- 邮件 Outbox 提供有限重试及投递标识；SMTP 外部副作用与数据库提交无法构成分布式事务，崩溃窗口内可能重复发送。并非“严格恰好一次”。
-- 微服务模式使用共享数据库和同一个业务应用包，不宣称已经实现数据库隔离、独立演进或完整服务治理。
-- 多实例邮件队列及 Redis 等外部服务的验证情况见 `docs/VERIFICATION.md`，不可把编译成功等同于部署成功。
-# 无 Docker 在线问答
-
-单体论坛新增可选在线模型接口，操作步骤见 [docs/ONLINE-AI.md](docs/ONLINE-AI.md)。可运行 `configure-ai.ps1` 在本地配置，默认关闭；真实密钥不进入代码。已完成DeepSeek真实资料问答验证；密钥通过本地窗口加密配置，不随源码分发。
-
+数据库凭据、模型密钥及本机运行数据通过独立配置管理，不随源码分发。
